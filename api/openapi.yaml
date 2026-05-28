@@ -1,0 +1,4037 @@
+openapi: 3.1.0
+info:
+  title: UCMC Protocol API
+  version: 0.1.0
+  description: |
+    Public API surface for the UCMC protocol. Every actor is identified by an Ed25519
+    public key. Mutations are signed in a body envelope; reads are signed via request
+    headers. See `verification/README.md` for code examples and `events/schemas.md`
+    for the signal opcode catalog.
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+servers:
+  - url: https://api.ucmccore.tech
+    description: Production
+tags:
+  - name: identity
+    description: Authentication, onboarding, identity verification
+  - name: profiles
+    description: Profile, portfolio, listings, catalogue
+  - name: discovery
+    description: Marketplace search, matching
+  - name: protocol
+    description: Core protocol primitives (challenges, control, capability, reads, value)
+  - name: content
+    description: Delivery, analytics, storage, templates
+  - name: disputes
+    description: Dispute resolution and support
+  - name: reputation
+    description: Reviews and reputation
+  - name: communication
+    description: Messaging, notifications, streams
+  - name: financial
+    description: Payments, wallet, tax
+  - name: legal
+    description: Legal documents, compliance
+  - name: recovery
+    description: Account recovery
+  - name: audit
+    description: Audit chain access
+  - name: governance
+    description: Protocol governance, proposals, voting
+
+components:
+  securitySchemes:
+    signedBody:
+      type: apiKey
+      in: header
+      name: X-Body-Signed
+      description: |
+        Request body MUST contain the signed mutation envelope: actorId, publicKey,
+        signature, signal, metadata, timestamp, nonce, idempotencyKey, and proof.
+        See `verification/README.md` for how to construct and sign the envelope.
+    signedHeaders:
+      type: apiKey
+      in: header
+      name: x-signature
+      description: |
+        Five headers required: x-actor-id, x-public-key, x-timestamp, x-nonce,
+        x-signature. The signature covers a canonical string of the other four
+        headers. See `verification/README.md` for construction details.
+
+  schemas:
+    ActorId:
+      type: string
+      pattern: '^[0-9a-f]{64}$'
+      description: Hex SHA-256 derived from the actor's Ed25519 public key.
+    PublicKeyHex:
+      type: string
+      pattern: '^[0-9a-f]{64}$'
+      description: 32-byte Ed25519 public key in hex.
+    SignatureHex:
+      type: string
+      pattern: '^[0-9a-f]{128}$'
+      description: 64-byte Ed25519 signature in hex.
+    TraceId:
+      type: string
+      pattern: '^[0-9a-f]{32,64}$'
+      description: Unique trace identifier for the operation.
+    Nonce:
+      type: string
+      description: One-time nonce for replay protection.
+    Timestamp:
+      type: integer
+      format: int64
+      description: Milliseconds since Unix epoch.
+    SignalOpcode:
+      type: string
+      pattern: '^0x[0-9a-f]{2}$'
+      examples:
+        - '0x53'
+        - '0x02'
+        - '0x04'
+      description: Two-byte hex opcode identifying the mutation type.
+    SignedMutationEnvelope:
+      type: object
+      required:
+        - actorId
+        - publicKey
+        - signature
+        - signal
+        - metadata
+        - timestamp
+        - nonce
+        - idempotencyKey
+      properties:
+        actorId:
+          $ref: '#/components/schemas/ActorId'
+        publicKey:
+          $ref: '#/components/schemas/PublicKeyHex'
+        signature:
+          $ref: '#/components/schemas/SignatureHex'
+        signal:
+          $ref: '#/components/schemas/SignalOpcode'
+        metadata:
+          type: object
+          description: Signal-specific payload. Shape varies by opcode.
+        timestamp:
+          $ref: '#/components/schemas/Timestamp'
+        nonce:
+          $ref: '#/components/schemas/Nonce'
+        traceId:
+          $ref: '#/components/schemas/TraceId'
+        idempotencyKey:
+          type: string
+          description: Client-generated key for idempotent mutations.
+        proof:
+          type: object
+          properties:
+            contextHash:
+              type: string
+            proofHash:
+              type: string
+    Response:
+      type: object
+      required:
+        - ok
+      properties:
+        ok:
+          type: boolean
+        data:
+          type: object
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    ErrorResponse:
+      type: object
+      required:
+        - ok
+        - error
+      properties:
+        ok:
+          type: boolean
+          const: false
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    Money:
+      type: string
+      pattern: '^[0-9]+$'
+      description: Monetary amount in minor units (BigInt string).
+    Email:
+      type: string
+      format: email
+    KycStatus:
+      type: string
+      enum:
+        - NOT_STARTED
+        - PENDING
+        - PENDING_REVIEW
+        - VERIFIED
+        - REJECTED
+        - EXPIRED
+        - SANCTIONS_HIT
+    DisputeStatus:
+      type: string
+      enum:
+        - OPEN
+        - EVIDENCE
+        - VOTING
+        - RESOLVED
+        - CANCELLED
+    DisputeOutcome:
+      type: string
+      enum:
+        - BUYER
+        - SELLER
+        - SPLIT
+        - CANCELLED
+    WithdrawalStatus:
+      type: string
+      enum:
+        - PENDING
+        - TIMELOCKED
+        - RELEASED
+        - CANCELLED
+    WithdrawalSettlementStatus:
+      type: string
+      enum:
+        - SUBMITTED
+        - SETTLED
+        - FAILED
+    DeliveryMode:
+      type: string
+      enum:
+        - FILE
+        - ACCESS
+        - MANUAL
+    ActorRole:
+      type: string
+      enum:
+        - BUYER
+        - SELLER
+        - BOTH
+    LegalJurisdiction:
+      type: string
+      description: Jurisdiction code for legal compliance.
+    MutationResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        committed:
+          type: boolean
+        actorId:
+          $ref: '#/components/schemas/ActorId'
+        traceId:
+          $ref: '#/components/schemas/TraceId'
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            ok: false
+            error:
+              code: unauthorized
+              message: Missing or invalid signature.
+    Forbidden:
+      description: Authenticated but insufficient permissions.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            ok: false
+            error:
+              code: forbidden
+              message: Actor does not have permission for this action.
+    TimestampDrift:
+      description: Request timestamp exceeds allowed drift window.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            ok: false
+            error:
+              code: timestamp_drift_exceeded
+              message: Request timestamp is outside the acceptable drift window.
+    Replay:
+      description: Nonce has already been consumed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            ok: false
+            error:
+              code: replay_detected
+              message: This nonce has already been used.
+    RateLimited:
+      description: Too many requests.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            ok: false
+            error:
+              code: rate_limited
+              message: Too many requests. Try again later.
+    ServerError:
+      description: Internal server error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            ok: false
+            error:
+              code: internal_error
+              message: An unexpected error occurred.
+
+paths:
+  # ──────────────────────────────────────────────
+  # tag: identity
+  # ──────────────────────────────────────────────
+
+  /auth/oauth/callback:
+    post:
+      operationId: oauthCallback
+      summary: Complete OAuth callback and return actor credentials.
+      tags: [identity]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, code, state, codeVerifier]
+              properties:
+                provider:
+                  type: string
+                code:
+                  type: string
+                state:
+                  type: string
+                codeVerifier:
+                  type: string
+      responses:
+        '200':
+          description: OAuth exchange successful.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      actorId:
+                        $ref: '#/components/schemas/ActorId'
+                      encryptedKeypair:
+                        type: string
+        '400':
+          $ref: '#/components/responses/TimestampDrift'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /auth/oauth/keypair:
+    post:
+      operationId: oauthKeypair
+      summary: Exchange OAuth session for an encrypted keypair.
+      tags: [identity]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, sessionToken]
+              properties:
+                provider:
+                  type: string
+                sessionToken:
+                  type: string
+      responses:
+        '200':
+          description: Keypair returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      encryptedKeypair:
+                        type: string
+                      publicKey:
+                        $ref: '#/components/schemas/PublicKeyHex'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /auth/providers:
+    get:
+      operationId: listAuthProviders
+      summary: List supported OAuth providers.
+      tags: [identity]
+      security: []
+      responses:
+        '200':
+          description: Provider list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      providers:
+                        type: array
+                        items:
+                          type: string
+
+  /onboarding/status/{actorId}:
+    get:
+      operationId: getOnboardingStatus
+      summary: Aggregated onboarding status for an actor.
+      tags: [identity]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Onboarding status.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      terms:
+                        type: object
+                        properties:
+                          accepted:
+                            type: boolean
+                      email:
+                        type: object
+                        properties:
+                          bound:
+                            type: boolean
+                          verified:
+                            type: boolean
+                      profile:
+                        type: object
+                        properties:
+                          created:
+                            type: boolean
+                      kyc:
+                        type: object
+                        properties:
+                          status:
+                            $ref: '#/components/schemas/KycStatus'
+                      role:
+                        type: object
+                        properties:
+                          selected:
+                            type: boolean
+                      completed:
+                        type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /onboarding/terms:
+    post:
+      operationId: acceptTerms
+      summary: Accept platform terms of service. Signal 0x69. Idempotent.
+      tags: [identity]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Terms accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '409':
+          description: Terms already accepted (idempotent duplicate).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /onboarding/bind-email:
+    post:
+      operationId: bindEmail
+      summary: Bind an email address to the actor identity. Signal 0x68.
+      tags: [identity]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SignedMutationEnvelope'
+                - type: object
+                  properties:
+                    metadata:
+                      type: object
+                      properties:
+                        email:
+                          $ref: '#/components/schemas/Email'
+      responses:
+        '200':
+          description: Email bound. OTP sent for verification.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Replay'
+
+  /onboarding/verify-email:
+    post:
+      operationId: verifyEmail
+      summary: Verify a 6-digit OTP sent to the bound email.
+      tags: [identity]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actorId, otp, publicKey, signature, timestamp, nonce]
+              properties:
+                actorId:
+                  $ref: '#/components/schemas/ActorId'
+                otp:
+                  type: string
+                  pattern: '^\d{6}$'
+                publicKey:
+                  $ref: '#/components/schemas/PublicKeyHex'
+                signature:
+                  $ref: '#/components/schemas/SignatureHex'
+                timestamp:
+                  $ref: '#/components/schemas/Timestamp'
+                nonce:
+                  $ref: '#/components/schemas/Nonce'
+      responses:
+        '200':
+          description: Email verified.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '400':
+          description: Invalid or expired OTP.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /onboarding/resend-verify:
+    post:
+      operationId: resendVerifyEmail
+      summary: Resend the verification OTP. Cooldown applies.
+      tags: [identity]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actorId]
+              properties:
+                actorId:
+                  $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: OTP resent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /onboarding/bind-eth:
+    post:
+      operationId: bindEthAddress
+      summary: Bind an Ethereum address to the actor identity. Signal 0x95.
+      tags: [identity]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Ethereum address bound.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Replay'
+
+  /kyc/start:
+    post:
+      operationId: startKyc
+      summary: Start identity verification via KYC provider. Signal 0x90.
+      tags: [identity]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: KYC session created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      sessionId:
+                        type: string
+                      sdkUrl:
+                        type: string
+                        format: uri
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /kyc/status/{actorId}:
+    get:
+      operationId: getKycStatus
+      summary: Current KYC verification status for an actor.
+      tags: [identity]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: KYC status.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      kyc_status:
+                        $ref: '#/components/schemas/KycStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────────
+  # tag: profiles
+  # ──────────────────────────────────────────────
+
+  /profile/search:
+    get:
+      operationId: searchProfiles
+      summary: Search actor profiles.
+      tags: [profiles]
+      security: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Search results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /profile/batch:
+    get:
+      operationId: batchGetProfiles
+      summary: Fetch multiple profiles by actor IDs.
+      tags: [profiles]
+      security: []
+      parameters:
+        - name: actorIds
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Comma-separated actor IDs.
+      responses:
+        '200':
+          description: Batch profile results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /profile/private/{actorId}:
+    get:
+      operationId: getPrivateProfile
+      summary: Private profile fields. Self-only access.
+      tags: [profiles]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Private profile data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /profile/{actorId}/catalogue:
+    get:
+      operationId: getActorCatalogue
+      summary: List catalogue items for an actor.
+      tags: [profiles]
+      security: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Catalogue items.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /profile/{actorId}/full:
+    get:
+      operationId: getFullProfile
+      summary: Full public profile for an actor.
+      tags: [profiles]
+      security: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Full profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /profile/{actorId}:
+    get:
+      operationId: getProfile
+      summary: Basic public profile for an actor.
+      tags: [profiles]
+      security: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Basic profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /profile:
+    post:
+      operationId: createOrUpdateProfile
+      summary: Create or update actor profile. Signal 0x61.
+      tags: [profiles]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SignedMutationEnvelope'
+                - type: object
+                  properties:
+                    metadata:
+                      type: object
+                      properties:
+                        legal_name:
+                          type: string
+                        display_name:
+                          type: string
+                        bio:
+                          type: string
+                        avatar_url:
+                          type: string
+                          format: uri
+                        role:
+                          $ref: '#/components/schemas/ActorRole'
+      responses:
+        '200':
+          description: Profile created or updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Replay'
+
+  /profile/catalogue:
+    post:
+      operationId: createCatalogueItem
+      summary: Create a catalogue item.
+      tags: [profiles]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Catalogue item created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /profile/catalogue/{id}:
+    put:
+      operationId: updateCatalogueItem
+      summary: Update a catalogue item.
+      tags: [profiles]
+      security:
+        - signedBody: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Item updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      operationId: deactivateCatalogueItem
+      summary: Deactivate a catalogue item.
+      tags: [profiles]
+      security:
+        - signedBody: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item deactivated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /profile/catalogue/{id}/update:
+    post:
+      operationId: updateCatalogueItemAlt
+      summary: Update a catalogue item (alternate POST path).
+      tags: [profiles]
+      security:
+        - signedBody: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Item updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /profile/catalogue/{id}/deactivate:
+    post:
+      operationId: deactivateCatalogueItemAlt
+      summary: Deactivate a catalogue item (alternate POST path).
+      tags: [profiles]
+      security:
+        - signedBody: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item deactivated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /profile/photo/{actorId}:
+    post:
+      operationId: uploadProfilePhoto
+      summary: Upload a profile photo. Multipart form data.
+      tags: [profiles]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                photo:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Photo uploaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /profile/pending/{pendingId}:
+    get:
+      operationId: getPendingProfile
+      summary: Retrieve a pending profile update.
+      tags: [profiles]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: pendingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pending profile data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /portfolio/profile/{actorId}/portfolio:
+    get:
+      operationId: getPublicPortfolio
+      summary: Public portfolio for an actor.
+      tags: [profiles]
+      security: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Portfolio items.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /portfolio/portfolio/mine:
+    get:
+      operationId: getOwnPortfolio
+      summary: Fetch own portfolio items.
+      tags: [profiles]
+      security:
+        - signedHeaders: []
+      responses:
+        '200':
+          description: Own portfolio.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /portfolio/portfolio/file/{fileKey}:
+    get:
+      operationId: getPortfolioFile
+      summary: Get a signed URL for a portfolio file.
+      tags: [profiles]
+      security: []
+      parameters:
+        - name: fileKey
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Signed file URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /portfolio/portfolio:
+    post:
+      operationId: submitPortfolioItem
+      summary: Submit a new portfolio item.
+      tags: [profiles]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Portfolio item submitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /portfolio/portfolio/{id}:
+    put:
+      operationId: updatePortfolioItem
+      summary: Update a portfolio item.
+      tags: [profiles]
+      security:
+        - signedBody: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Item updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      operationId: deletePortfolioItem
+      summary: Delete a portfolio item.
+      tags: [profiles]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /portfolio/portfolio/{id}/update:
+    post:
+      operationId: updatePortfolioItemAlt
+      summary: Update a portfolio item (alternate POST path).
+      tags: [profiles]
+      security:
+        - signedBody: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Item updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /portfolio/portfolio/{id}/delete:
+    post:
+      operationId: deletePortfolioItemAlt
+      summary: Delete a portfolio item (alternate POST path).
+      tags: [profiles]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /listing/search:
+    get:
+      operationId: searchListings
+      summary: Search listings with filters.
+      tags: [profiles]
+      security: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: minPrice
+          in: query
+          schema:
+            type: string
+        - name: maxPrice
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Listing search results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /listing/featured:
+    get:
+      operationId: getFeaturedListings
+      summary: Retrieve featured listings.
+      tags: [profiles]
+      security: []
+      responses:
+        '200':
+          description: Featured listings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /listing/actor/{actorId}:
+    get:
+      operationId: getActorListings
+      summary: All listings by a specific actor.
+      tags: [profiles]
+      security: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Actor listings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /listing/{uid}:
+    get:
+      operationId: getListingDetail
+      summary: Listing detail by UID.
+      tags: [profiles]
+      security: []
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Listing detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+    put:
+      operationId: updateListing
+      summary: Update a listing.
+      tags: [profiles]
+      security:
+        - signedBody: []
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Listing updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /listing:
+    post:
+      operationId: createListing
+      summary: Create a new listing. Requires KYC verification and seller agreement.
+      tags: [profiles]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Listing created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /listing/{uid}/click:
+    post:
+      operationId: recordListingClick
+      summary: Record a click on a listing.
+      tags: [profiles]
+      security: []
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Click recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  # ──────────────────────────────────────────────
+  # tag: discovery
+  # ──────────────────────────────────────────────
+
+  /marketplace:
+    get:
+      operationId: browseMarketplace
+      summary: Browse the marketplace.
+      tags: [discovery]
+      security: []
+      responses:
+        '200':
+          description: Marketplace listings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /marketplace/search:
+    get:
+      operationId: searchMarketplace
+      summary: Primary marketplace search with filtering and sorting.
+      tags: [discovery]
+      security: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: tags
+          in: query
+          schema:
+            type: string
+        - name: minPrice
+          in: query
+          schema:
+            type: string
+        - name: maxPrice
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Search results with commitment hash.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          type: object
+                      total:
+                        type: integer
+                      hasMore:
+                        type: boolean
+                      commitmentHash:
+                        type: string
+
+  /match/stats:
+    get:
+      operationId: getMatchStats
+      summary: Matching engine statistics.
+      tags: [discovery]
+      security: []
+      responses:
+        '200':
+          description: Match stats.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /match:
+    get:
+      operationId: queryMatch
+      summary: Run a matching query.
+      tags: [discovery]
+      security: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Match results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  # ──────────────────────────────────────────────
+  # tag: protocol
+  # ──────────────────────────────────────────────
+
+  /challenge:
+    post:
+      operationId: submitChallenge
+      summary: Submit a challenge response.
+      tags: [protocol]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Challenge accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /challenge/start:
+    post:
+      operationId: startChallenge
+      summary: Start a new challenge session.
+      tags: [protocol]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Challenge session started.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /challenge/next:
+    post:
+      operationId: nextChallenge
+      summary: Fetch the next challenge in the session.
+      tags: [protocol]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Next challenge.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /control:
+    post:
+      operationId: submitSignedMutation
+      summary: Universal signed mutation endpoint. Signal opcode determines the action.
+      description: |
+        The primary protocol endpoint. Every state-changing operation is submitted as a
+        signed mutation envelope. The `signal` field (an opcode from `events/schemas.md`)
+        determines what action is performed. The `metadata` field carries signal-specific
+        payload data. Common signals include: 0x53 (initiate purchase), 0x02 (seller accept),
+        0x04 (delivery registered), 0x65 (buyer confirm), 0x05 (finalize), 0x66 (review).
+      tags: [protocol]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Mutation committed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '400':
+          $ref: '#/components/responses/TimestampDrift'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Replay or idempotency conflict.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                replay:
+                  value:
+                    ok: false
+                    error:
+                      code: replay_detected
+                      message: This nonce has already been used.
+                idempotency:
+                  value:
+                    ok: false
+                    error:
+                      code: idempotency_conflict
+                      message: A different mutation was already committed with this idempotency key.
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /capability:
+    post:
+      operationId: assertCapability
+      summary: Assert a protocol capability.
+      tags: [protocol]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Capability asserted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /read:
+    get:
+      operationId: readEvents
+      summary: Read events from the event log.
+      tags: [protocol]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: filter
+          in: query
+          schema:
+            type: string
+        - name: since
+          in: query
+          schema:
+            type: string
+        - name: until
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Event list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /read/projection:
+    get:
+      operationId: readProjection
+      summary: Snapshot of a materialized projection.
+      tags: [protocol]
+      security:
+        - signedHeaders: []
+      responses:
+        '200':
+          description: Projection snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /read/projection/stream:
+    get:
+      operationId: streamProjection
+      summary: Server-sent event stream for projection updates.
+      tags: [protocol]
+      security:
+        - signedHeaders: []
+      responses:
+        '200':
+          description: SSE stream of projection changes.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /value:
+    get:
+      operationId: queryValue
+      summary: Query the value/ledger for an actor.
+      tags: [protocol]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Value/ledger data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────────
+  # tag: content
+  # ──────────────────────────────────────────────
+
+  /delivery/{escrowTraceId}:
+    get:
+      operationId: getDeliveryState
+      summary: Current delivery state for an escrow.
+      tags: [content]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: escrowTraceId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/TraceId'
+      responses:
+        '200':
+          description: Delivery state.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      mode:
+                        $ref: '#/components/schemas/DeliveryMode'
+                      status:
+                        type: string
+                      registeredAt:
+                        $ref: '#/components/schemas/Timestamp'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /delivery/register:
+    post:
+      operationId: registerDelivery
+      summary: Register delivery (alternate path to control signal 0x04).
+      tags: [content]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Delivery registered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /delivery/confirm:
+    post:
+      operationId: confirmDelivery
+      summary: Buyer confirms delivery (alternate path to control signal 0x65).
+      tags: [content]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Delivery confirmed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /delivery/trigger:
+    post:
+      operationId: triggerAutoRelease
+      summary: Trigger auto-release of escrowed funds after delivery window.
+      tags: [content]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Auto-release triggered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /analytics/{actorId}/snapshot:
+    get:
+      operationId: getAnalyticsSnapshot
+      summary: Self-only analytics snapshot.
+      tags: [content]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Analytics snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /analytics/{actorId}/listing/{listingUid}:
+    get:
+      operationId: getListingAnalytics
+      summary: Per-listing analytics.
+      tags: [content]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+        - name: listingUid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Listing analytics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /analytics/{actorId}/view:
+    post:
+      operationId: recordView
+      summary: Record a profile or listing view.
+      tags: [content]
+      security: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: View recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /analytics/{actorId}:
+    get:
+      operationId: getActorAnalytics
+      summary: Actor-level analytics.
+      tags: [content]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Actor analytics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /storage/upload-url:
+    post:
+      operationId: getUploadUrl
+      summary: Get a signed upload URL for object storage.
+      tags: [content]
+      security:
+        - signedHeaders: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actorId]
+              properties:
+                actorId:
+                  $ref: '#/components/schemas/ActorId'
+                filename:
+                  type: string
+                contentType:
+                  type: string
+      responses:
+        '200':
+          description: Signed upload URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      uploadUrl:
+                        type: string
+                        format: uri
+                      fileKey:
+                        type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /storage/download-url/{fileKey}:
+    get:
+      operationId: getDownloadUrl
+      summary: Get a signed download URL.
+      tags: [content]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: fileKey
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Signed download URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      downloadUrl:
+                        type: string
+                        format: uri
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /storage/{fileKey}:
+    delete:
+      operationId: deleteFile
+      summary: Delete a stored file.
+      tags: [content]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: fileKey
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /storage/quota/{actorId}:
+    get:
+      operationId: getStorageQuota
+      summary: Storage quota and usage for an actor.
+      tags: [content]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Quota info.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /storage/local-upload/{fileKey}:
+    put:
+      operationId: localUpload
+      summary: Alternate local file upload path.
+      tags: [content]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: fileKey
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Upload complete.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /storage/local-download/{fileKey}:
+    get:
+      operationId: localDownload
+      summary: Alternate local file download path.
+      tags: [content]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: fileKey
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File content.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /templates/search:
+    get:
+      operationId: searchTemplates
+      summary: Search available templates.
+      tags: [content]
+      security: []
+      responses:
+        '200':
+          description: Template search results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /templates/mine:
+    get:
+      operationId: getOwnTemplates
+      summary: List own templates.
+      tags: [content]
+      security:
+        - signedHeaders: []
+      responses:
+        '200':
+          description: Own templates.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /templates/{uid}:
+    get:
+      operationId: getTemplate
+      summary: Template detail.
+      tags: [content]
+      security: []
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+    put:
+      operationId: updateTemplate
+      summary: Update a template.
+      tags: [content]
+      security:
+        - signedBody: []
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Template updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /templates/create:
+    post:
+      operationId: createTemplate
+      summary: Create a new template.
+      tags: [content]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Template created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /templates/{uid}/update:
+    post:
+      operationId: updateTemplateAlt
+      summary: Update a template (alternate POST path).
+      tags: [content]
+      security:
+        - signedBody: []
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Template updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /templates/{uid}/apply:
+    post:
+      operationId: applyTemplate
+      summary: Apply a template to create content from it.
+      tags: [content]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Template applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────────
+  # tag: disputes
+  # ──────────────────────────────────────────────
+
+  /dispute/open:
+    post:
+      operationId: openDispute
+      summary: Open a dispute against a counterparty. Signal 0x10.
+      tags: [disputes]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SignedMutationEnvelope'
+                - type: object
+                  properties:
+                    metadata:
+                      type: object
+                      required: [counterparty, escrowTraceId, reason]
+                      properties:
+                        counterparty:
+                          $ref: '#/components/schemas/ActorId'
+                        escrowTraceId:
+                          $ref: '#/components/schemas/TraceId'
+                        reason:
+                          type: string
+                          minLength: 20
+                          maxLength: 1500
+      responses:
+        '200':
+          description: Dispute opened.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Replay'
+
+  /dispute/evidence:
+    post:
+      operationId: submitEvidence
+      summary: Submit evidence for an open dispute. Signal 0x13.
+      tags: [disputes]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SignedMutationEnvelope'
+                - type: object
+                  properties:
+                    metadata:
+                      type: object
+                      required: [disputeId, content]
+                      properties:
+                        disputeId:
+                          type: string
+                        content:
+                          type: string
+                          minLength: 10
+                          maxLength: 5000
+                        fileKey:
+                          type: string
+                          description: Optional file attachment (image/* or application/pdf).
+      responses:
+        '200':
+          description: Evidence submitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /dispute/vote:
+    post:
+      operationId: voteOnDispute
+      summary: Arbitrator votes on a dispute. Signal 0x11. Requires arbitrator role.
+      tags: [disputes]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SignedMutationEnvelope'
+                - type: object
+                  properties:
+                    metadata:
+                      type: object
+                      required: [disputeId, vote, weight]
+                      properties:
+                        disputeId:
+                          type: string
+                        vote:
+                          $ref: '#/components/schemas/DisputeOutcome'
+                        weight:
+                          type: number
+      responses:
+        '200':
+          description: Vote recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /dispute/resolve:
+    post:
+      operationId: resolveDispute
+      summary: Resolve a dispute via quorum auto-resolve.
+      tags: [disputes]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Dispute resolved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /support/tickets:
+    get:
+      operationId: listTickets
+      summary: List own support tickets.
+      tags: [disputes]
+      security:
+        - signedHeaders: []
+      responses:
+        '200':
+          description: Ticket list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createTicket
+      summary: Create a support ticket.
+      tags: [disputes]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Ticket created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /support/tickets/{id}:
+    get:
+      operationId: getTicket
+      summary: Support ticket detail.
+      tags: [disputes]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Ticket detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /support/tickets/{id}/reply:
+    post:
+      operationId: replyToTicket
+      summary: Reply to a support ticket.
+      tags: [disputes]
+      security:
+        - signedBody: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Reply added.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /support/tickets/{id}/close:
+    post:
+      operationId: closeTicket
+      summary: Close a support ticket.
+      tags: [disputes]
+      security:
+        - signedBody: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Ticket closed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /support/tickets/{id}/attach:
+    post:
+      operationId: attachToTicket
+      summary: Attach a file to a support ticket.
+      tags: [disputes]
+      security:
+        - signedBody: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: File attached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────────
+  # tag: reputation
+  # ──────────────────────────────────────────────
+
+  /reputation/reviews/{actorId}:
+    get:
+      operationId: getReviews
+      summary: List reviews for an actor.
+      tags: [reputation]
+      security: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Review list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /reputation/{actorId}:
+    get:
+      operationId: getReputation
+      summary: Reputation summary for an actor.
+      tags: [reputation]
+      security: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Reputation summary.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      total_reviews:
+                        type: integer
+                      star_sum:
+                        type: integer
+                      completed_count:
+                        type: integer
+
+  /reputation/review:
+    post:
+      operationId: submitReview
+      summary: Submit a review after a completed transaction. Signal 0x66.
+      tags: [reputation]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SignedMutationEnvelope'
+                - type: object
+                  properties:
+                    metadata:
+                      type: object
+                      required: [finalizeTraceId, stars]
+                      properties:
+                        finalizeTraceId:
+                          $ref: '#/components/schemas/TraceId'
+                        stars:
+                          type: integer
+                          minimum: 1
+                          maximum: 5
+                        body:
+                          type: string
+                          maxLength: 500
+                        positiveTags:
+                          type: array
+                          items:
+                            type: string
+                        negativeTags:
+                          type: array
+                          items:
+                            type: string
+      responses:
+        '200':
+          description: Review submitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Replay'
+
+  # ──────────────────────────────────────────────
+  # tag: communication
+  # ──────────────────────────────────────────────
+
+  /messaging/threads:
+    get:
+      operationId: listThreads
+      summary: List message threads.
+      tags: [communication]
+      security:
+        - signedHeaders: []
+      responses:
+        '200':
+          description: Thread list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /messaging/thread/{uid}:
+    get:
+      operationId: getThread
+      summary: Thread detail with messages.
+      tags: [communication]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Thread detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /messaging/thread/{uid}/context:
+    get:
+      operationId: getThreadContext
+      summary: Thread context (linked escrow, dispute, etc.).
+      tags: [communication]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Thread context.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /messaging/message:
+    post:
+      operationId: sendMessage
+      summary: Send a message in a thread.
+      tags: [communication]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Message sent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /messaging/thread/{uid}/read:
+    post:
+      operationId: markThreadRead
+      summary: Mark a thread as read.
+      tags: [communication]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Thread marked read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /messaging/thread:
+    post:
+      operationId: createThread
+      summary: Create a new message thread.
+      tags: [communication]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Thread created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /notification/feed/{actorId}:
+    get:
+      operationId: getNotificationFeed
+      summary: Notification feed. Self-only.
+      tags: [communication]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Notification feed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /notification/preferences/{actorId}:
+    get:
+      operationId: getNotificationPreferences
+      summary: Notification preferences for an actor.
+      tags: [communication]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Notification preferences.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /notification/preferences:
+    post:
+      operationId: setNotificationPreferences
+      summary: Update notification preferences.
+      tags: [communication]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Preferences updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /notification/read:
+    post:
+      operationId: markNotificationsRead
+      summary: Mark notifications as read.
+      tags: [communication]
+      security:
+        - signedHeaders: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notificationIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Notifications marked read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /notification/sse/{actorId}:
+    get:
+      operationId: streamNotifications
+      summary: Server-sent event stream for real-time notifications.
+      tags: [communication]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: SSE notification stream.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /stream:
+    get:
+      operationId: genericStream
+      summary: Generic server-sent event stream.
+      tags: [communication]
+      security: []
+      responses:
+        '200':
+          description: SSE stream.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /events:
+    get:
+      operationId: queryEvents
+      summary: Query protocol events.
+      tags: [communication]
+      security: []
+      responses:
+        '200':
+          description: Event query results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  # ──────────────────────────────────────────────
+  # tag: financial
+  # ──────────────────────────────────────────────
+
+  /payment/method:
+    post:
+      operationId: savePaymentMethod
+      summary: Save a payment method. Requires KYC verified. Signal 0x99.
+      tags: [financial]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Payment method saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /payment/methods/{actorId}:
+    get:
+      operationId: listPaymentMethods
+      summary: List saved payment methods for an actor.
+      tags: [financial]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Payment methods.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /payment/method/{id}:
+    delete:
+      operationId: removePaymentMethod
+      summary: Remove a saved payment method.
+      tags: [financial]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Method removed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /payment/setup-intent:
+    post:
+      operationId: setupPaymentIntent
+      summary: Initialize a payment intent. Requires KYC.
+      tags: [financial]
+      security:
+        - signedHeaders: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actorId]
+              properties:
+                actorId:
+                  $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Intent created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /payment/initiate:
+    post:
+      operationId: initiateDeposit
+      summary: Initiate a deposit via payments provider. Signal 0x80.
+      tags: [financial]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SignedMutationEnvelope'
+                - type: object
+                  properties:
+                    metadata:
+                      type: object
+                      required: [amount, currency, reference]
+                      properties:
+                        amount:
+                          $ref: '#/components/schemas/Money'
+                        currency:
+                          type: string
+                        reference:
+                          type: string
+      responses:
+        '200':
+          description: Deposit initiated. Redirect user to authorization URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      authorization_url:
+                        type: string
+                        format: uri
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /payment/paystack/verify:
+    post:
+      operationId: verifyDeposit
+      summary: Verify a deposit with the payments provider.
+      tags: [financial]
+      security:
+        - signedHeaders: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reference]
+              properties:
+                reference:
+                  type: string
+      responses:
+        '200':
+          description: Deposit verified.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /payment/payout-rails:
+    get:
+      operationId: listPayoutRails
+      summary: List supported payout rails.
+      tags: [financial]
+      security: []
+      responses:
+        '200':
+          description: Payout rails.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /payment/banks:
+    get:
+      operationId: listBanks
+      summary: List banks for a given country.
+      tags: [financial]
+      security: []
+      parameters:
+        - name: country
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Bank list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /wallet/balance/{actorId}:
+    get:
+      operationId: getBalance
+      summary: Wallet balance for an actor.
+      tags: [financial]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Balance breakdown.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      free:
+                        $ref: '#/components/schemas/Money'
+                      in_escrow:
+                        $ref: '#/components/schemas/Money'
+                      in_withdrawal:
+                        $ref: '#/components/schemas/Money'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /wallet/withdrawals/{actorId}:
+    get:
+      operationId: getWithdrawalHistory
+      summary: Withdrawal history for an actor.
+      tags: [financial]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Withdrawal history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /wallet/transactions/{actorId}:
+    get:
+      operationId: getTransactionHistory
+      summary: Transaction history for an actor.
+      tags: [financial]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Transaction history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /wallet/withdraw:
+    post:
+      operationId: requestWithdrawal
+      summary: Request a withdrawal. Requires KYC. Signal 0x70.
+      tags: [financial]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SignedMutationEnvelope'
+                - type: object
+                  properties:
+                    metadata:
+                      type: object
+                      required: [amount, destination, destinationType]
+                      properties:
+                        amount:
+                          $ref: '#/components/schemas/Money'
+                        destination:
+                          type: string
+                        destinationType:
+                          type: string
+                          enum: [CRYPTO, FIAT]
+      responses:
+        '200':
+          description: Withdrawal requested.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /wallet/deposit/confirm:
+    post:
+      operationId: confirmDeposit
+      summary: Confirm a deposit after provider success callback.
+      tags: [financial]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Deposit confirmed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /tax/profile:
+    get:
+      operationId: getTaxProfile
+      summary: Tax profile for the authenticated actor.
+      tags: [financial]
+      security:
+        - signedHeaders: []
+      responses:
+        '200':
+          description: Tax profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: setTaxProfile
+      summary: Set or update tax profile. Signal 0xa9.
+      tags: [financial]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SignedMutationEnvelope'
+                - type: object
+                  properties:
+                    metadata:
+                      type: object
+                      required: [country, entity_type, tax_id_hash]
+                      properties:
+                        country:
+                          type: string
+                        entity_type:
+                          type: string
+                        tax_id_hash:
+                          type: string
+      responses:
+        '200':
+          description: Tax profile updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /tax/forms:
+    get:
+      operationId: listTaxForms
+      summary: List available tax forms.
+      tags: [financial]
+      security:
+        - signedHeaders: []
+      responses:
+        '200':
+          description: Tax forms.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /tax/forms/{id}:
+    get:
+      operationId: getTaxForm
+      summary: Tax form detail.
+      tags: [financial]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tax form detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /tax/forms/{id}/download:
+    get:
+      operationId: downloadTaxForm
+      summary: Download a tax form document.
+      tags: [financial]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Form download.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /tax/certificate/upload/{actorId}:
+    post:
+      operationId: uploadTaxCertificate
+      summary: Upload a tax certificate.
+      tags: [financial]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                certificate:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Certificate uploaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /tax/certificate/mine:
+    get:
+      operationId: getOwnTaxCertificates
+      summary: List own tax certificates.
+      tags: [financial]
+      security:
+        - signedHeaders: []
+      responses:
+        '200':
+          description: Own certificates.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────────
+  # tag: legal
+  # ──────────────────────────────────────────────
+
+  /legal/pending/{actorId}:
+    get:
+      operationId: getPendingLegalDocs
+      summary: Pending legal documents for an actor.
+      tags: [legal]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Pending documents.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /legal/active:
+    get:
+      operationId: getActiveLegalDocs
+      summary: Currently active legal documents.
+      tags: [legal]
+      security: []
+      responses:
+        '200':
+          description: Active legal documents.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /legal/content/{filename}:
+    get:
+      operationId: getLegalContent
+      summary: Legal document content by filename.
+      tags: [legal]
+      security: []
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Document content.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /legal/document/{id}:
+    get:
+      operationId: getLegalDocument
+      summary: Full legal document with content hash.
+      tags: [legal]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Document with hash.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /legal/sign:
+    post:
+      operationId: signLegalDocument
+      summary: Cryptographically sign a legal document. Signal 0x93.
+      tags: [legal]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SignedMutationEnvelope'
+                - type: object
+                  properties:
+                    metadata:
+                      type: object
+                      required: [documentId, contentHash]
+                      properties:
+                        documentId:
+                          type: string
+                        contentHash:
+                          type: string
+      responses:
+        '200':
+          description: Document signed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /legal/erasure-request:
+    post:
+      operationId: requestErasure
+      summary: Submit a GDPR data erasure request.
+      tags: [legal]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Erasure request submitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /legal/export/{actorId}:
+    get:
+      operationId: exportData
+      summary: GDPR data export for an actor.
+      tags: [legal]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Data export.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /legal/erase/{actorId}:
+    delete:
+      operationId: executeErasure
+      summary: Execute GDPR data erasure.
+      tags: [legal]
+      security:
+        - signedHeaders: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Data erased.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compliance/flags:
+    get:
+      operationId: getComplianceFlags
+      summary: List compliance flags for the authenticated actor.
+      tags: [legal]
+      security:
+        - signedHeaders: []
+      responses:
+        '200':
+          description: Compliance flags.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compliance/flags/{id}/resolve:
+    post:
+      operationId: resolveComplianceFlag
+      summary: Resolve a compliance flag.
+      tags: [legal]
+      security:
+        - signedBody: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Flag resolved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────────
+  # tag: recovery
+  # ──────────────────────────────────────────────
+
+  /recovery/setup:
+    post:
+      operationId: setupRecovery
+      summary: Set up account recovery with a guardian email.
+      tags: [recovery]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Recovery set up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /recovery/init:
+    post:
+      operationId: initiateRecovery
+      summary: Initiate an account recovery process.
+      tags: [recovery]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actorId]
+              properties:
+                actorId:
+                  $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Recovery initiated. Guardian notified.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /recovery/approve:
+    post:
+      operationId: approveRecovery
+      summary: Guardian approves an account recovery.
+      tags: [recovery]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        '200':
+          description: Recovery approved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /recovery/status/{actorId}:
+    get:
+      operationId: getRecoveryStatus
+      summary: Current recovery status for an actor.
+      tags: [recovery]
+      security: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Recovery status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /recovery/reconstruct:
+    post:
+      operationId: reconstructKeypair
+      summary: Reconstruct keypair after guardian approval.
+      tags: [recovery]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actorId, recoveryToken]
+              properties:
+                actorId:
+                  $ref: '#/components/schemas/ActorId'
+                recoveryToken:
+                  type: string
+      responses:
+        '200':
+          description: Keypair reconstructed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      encryptedKeypair:
+                        type: string
+                      publicKey:
+                        $ref: '#/components/schemas/PublicKeyHex'
+
+  # ──────────────────────────────────────────────
+  # tag: audit
+  # ──────────────────────────────────────────────
+
+  /audit/mine:
+    get:
+      operationId: getOwnAuditTrail
+      summary: Own audit trail.
+      tags: [audit]
+      security:
+        - signedHeaders: []
+      responses:
+        '200':
+          description: Audit trail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /audit/verify/{traceId}:
+    get:
+      operationId: verifyAuditTrace
+      summary: Verify a specific trace in the audit chain.
+      tags: [audit]
+      security: []
+      parameters:
+        - name: traceId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/TraceId'
+      responses:
+        '200':
+          description: Verification result.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      valid:
+                        type: boolean
+                      traceId:
+                        $ref: '#/components/schemas/TraceId'
+                      signatureValid:
+                        type: boolean
+                      chainIntact:
+                        type: boolean
+
+  # ──────────────────────────────────────────────
+  # tag: governance
+  # ──────────────────────────────────────────────
+
+  /governance/params:
+    get:
+      operationId: getGovernanceParams
+      summary: Current governance parameters.
+      tags: [governance]
+      security: []
+      responses:
+        '200':
+          description: Governance parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /governance/proposals:
+    get:
+      operationId: listProposals
+      summary: List governance proposals.
+      tags: [governance]
+      security: []
+      responses:
+        '200':
+          description: Proposal list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /governance/status:
+    get:
+      operationId: getGovernanceStatus
+      summary: Current governance system status.
+      tags: [governance]
+      security: []
+      responses:
+        '200':
+          description: Governance status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /governance/voter-weight/{actorId}:
+    get:
+      operationId: getVoterWeight
+      summary: Voting weight for an actor.
+      tags: [governance]
+      security: []
+      parameters:
+        - name: actorId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorId'
+      responses:
+        '200':
+          description: Voter weight.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /governance/categories:
+    get:
+      operationId: getGovernanceCategories
+      summary: List governance proposal categories.
+      tags: [governance]
+      security: []
+      responses:
+        '200':
+          description: Category list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /governance/propose:
+    post:
+      operationId: submitProposal
+      summary: Submit a governance proposal.
+      tags: [governance]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Proposal submitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /governance/vote:
+    post:
+      operationId: submitGovernanceVote
+      summary: Vote on a governance proposal.
+      tags: [governance]
+      security:
+        - signedBody: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedMutationEnvelope'
+      responses:
+        '200':
+          description: Vote recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
