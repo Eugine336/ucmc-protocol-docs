@@ -3,7 +3,7 @@
 > A protocol for verified economic exchange between strangers — cryptographic
 > identity, signed events, escrowed settlement, auditable lifecycle.
 
-UCMC ("Universal Commerce & Marketplace Core") is a server-mediated
+UCMC ("Universal Commerce & Market Core") is a server-mediated
 protocol that gives users economic exchange with the integrity properties
 usually associated with distributed ledgers — without a blockchain, a token,
 or a global consensus protocol. Every actor is identified by an Ed25519
