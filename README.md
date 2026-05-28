@@ -1,27 +1,41 @@
 # UCMC Protocol — Public Documentation
 
-UCMC is a verified economic network using cryptographic identity, escrowed settlement, and event-sourced audit trails. This repository contains the public protocol documentation, derived and curated from the production system.
+UCMC is a verified economic network using cryptographic identity, escrowed settlement, and event-sourced audit trails. This repository is the public protocol documentation, derived from the production system.
 
-> Status: This documentation is generated and curated from the internal codebase. The implementation is not currently open source.
+> **Note:** This documentation is generated and curated from the internal codebase. The implementation is not currently open source.
 
 ## Quick Links
 
-- [Architecture overview](architecture/overview.md)
-- [Identity and signing](crypto/identity-and-signing.md)
-- [Threat model](threat-model/README.md)
+- [Architecture Overview](architecture/overview.md) — System topology, component boundaries, design rationale
+- [Cryptographic Identity & Signing](crypto/identity-and-signing.md) — Ed25519 model, signing domains, key derivation
+- [Glossary](glossary.md) — Term definitions
 
 ### Protocol Flows
 
-- [Marketplace transaction](flows/marketplace-transaction.md)
-- [KYC verification](flows/kyc.md)
-- [Disputes](flows/disputes.md)
-- [Withdrawals](flows/withdrawals.md)
-- [Onboarding](flows/onboarding.md)
+- [Marketplace Transaction](flows/marketplace-transaction.md) — Hire → escrow → delivery → finalization lifecycle
+- [KYC](flows/kyc.md) — Identity verification flow
+- [Disputes](flows/disputes.md) — Dispute resolution and arbitration
+- [Withdrawals](flows/withdrawals.md) — Withdrawal processing
+- [Onboarding](flows/onboarding.md) — Actor onboarding and identity setup
+
+### API
+
+- [API Overview](api/README.md) — Auth model, request/response envelopes, error codes
+- [OpenAPI 3.1 Spec](api/openapi.yaml) — Full machine-readable API surface
+
+### API & Events
+
+- [Event Schemas](events/schemas.md) — Signal opcode catalog and payload structures
+- [Verification Examples](verification/README.md) — TypeScript reference implementations for signing and verification
+
+### SDK
+
+- [TypeScript SDK](sdk/typescript/README.md) — Reference implementation for identity, signing, verification, and API client
 
 ### Reference
 
-- [Glossary](glossary.md)
+- [Threat Model](threat-model/README.md) — Adversary assumptions and trust boundaries
 
 ## License
 
-Licensed under Apache-2.0. See [LICENSE](LICENSE).
+This project is licensed under the [Apache License 2.0](LICENSE).
