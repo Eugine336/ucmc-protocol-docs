@@ -2,6 +2,13 @@
 
 This directory contains the machine-readable API specification and reference documentation for the UCMC protocol's public HTTP surface.
 
+## Audience
+
+This document describes the public surface of the UCMC API. It is for developers
+building clients, verifiers, or integrations. Implementation code is not in this
+repository — see [verification/README.md](../verification/README.md) and
+[sdk/typescript/](../sdk/typescript/) for working reference code.
+
 ## Overview
 
 The UCMC API uses a cryptographic authentication model where every actor is identified by an Ed25519 public key. There are two authentication modes:
@@ -35,6 +42,20 @@ Read operations use **signed headers**:
 | `x-timestamp` | Milliseconds since epoch |
 | `x-nonce` | One-time nonce |
 | `x-signature` | Signature over the canonical header string |
+
+### Response envelope
+
+All endpoints return a JSON object with the following shape:
+
+```json
+{
+  "ok": true,
+  "data": { ... }
+}
+```
+
+On failure, `ok` is `false` and the body contains an `error` object instead of
+`data` — see the next section.
 
 ### Error envelope
 
@@ -81,6 +102,26 @@ The API surface is organized into the following groups:
 | recovery | `/recovery` | Account recovery via guardian |
 | audit | `/audit` | Audit trail access and verification |
 | governance | `/governance` | Protocol governance, proposals, voting |
+
+## Rate limits
+
+The API enforces per-actor and per-IP rate limits. Requests that exceed limits
+return HTTP 429 with `error.code = "rate_limited"`. Specific thresholds are an
+operational concern and may change without notice; clients should respect the
+`Retry-After` response header when present and implement exponential backoff for
+retried requests.
+
+## Idempotency
+
+Every signed mutation request includes an `idempotencyKey` field. If a request
+with the same `idempotencyKey` is retried (e.g., after a network failure), the
+server returns the original response without re-executing the mutation. This
+makes signed writes safe to retry from the client.
+
+A different mutation submitted under the same `idempotencyKey` returns HTTP 409
+with `error.code = "idempotency_conflict"`. Clients should generate a fresh
+`idempotencyKey` per logical operation (e.g., per hire attempt, per withdrawal
+request) — typically a random UUID or 128+ bits of randomness encoded as hex.
 
 ## Machine-readable spec
 
