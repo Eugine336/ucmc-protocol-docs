@@ -18,6 +18,11 @@ UCMC is a verified economic network using cryptographic identity, escrowed settl
 - [Withdrawals](flows/withdrawals.md)
 - [Onboarding](flows/onboarding.md)
 
+### API
+
+- [API overview](api/README.md)
+- [OpenAPI 3.1 spec](api/openapi.yaml)
+
 ### Reference
 
 - [Glossary](glossary.md)
