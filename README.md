@@ -4,10 +4,22 @@ UCMC is a verified economic network using cryptographic identity, escrowed settl
 
 > Status: This documentation is generated and curated from the internal codebase. The implementation is not currently open source.
 
-## Quick links
+## Quick Links
 
 - [Architecture overview](architecture/overview.md)
 - [Identity and signing](crypto/identity-and-signing.md)
+- [Threat model](threat-model/README.md)
+
+### Protocol Flows
+
+- [Marketplace transaction](flows/marketplace-transaction.md)
+- [KYC verification](flows/kyc.md)
+- [Disputes](flows/disputes.md)
+- [Withdrawals](flows/withdrawals.md)
+- [Onboarding](flows/onboarding.md)
+
+### Reference
+
 - [Glossary](glossary.md)
 
 ## License
