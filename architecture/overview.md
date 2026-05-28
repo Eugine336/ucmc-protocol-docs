@@ -8,11 +8,11 @@ This document describes the logical architecture of UCMC: component boundaries, 
 
 ```mermaid
 flowchart LR
-    Users[Users and Integrators] --> Edge[Edge CDN/WAF]
+    Users[Users and Integrators] --> Edge["Edge CDN/WAF"]
     Edge --> Gateway[API Gateway and Reverse Proxy]
     Edge --> Landing[Public Landing Surface]
     Gateway --> Frontend[User Application]
-    Gateway --> Admin[Admin Console (restricted surface)]
+    Gateway --> Admin["Admin Console (restricted surface)"]
     Gateway --> API[Protocol API Service]
     API --> Workers[Background Workers]
     API --> DB[Primary Database]
