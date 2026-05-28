@@ -20,18 +20,21 @@ UCMC is a verified economic network using cryptographic identity, escrowed settl
 
 ### API
 
-- [API overview](api/README.md)
-- [OpenAPI 3.1 spec](api/openapi.yaml)
+- [API Overview](api/README.md) — Auth model, request/response envelopes, error codes
+- [OpenAPI 3.1 Spec](api/openapi.yaml) — Full machine-readable API surface
+
+### API & Events
+
+- [Event Schemas](events/schemas.md) — Signal opcode catalog and payload structures
+- [Verification Examples](verification/README.md) — TypeScript reference implementations for signing and verification
+
+### SDK
+
+- [TypeScript SDK](sdk/typescript/README.md) — Reference implementation for identity, signing, verification, and API client
 
 ### Reference
 
 - [Threat Model](threat-model/README.md) — Adversary assumptions and trust boundaries
-
-### API & Events
-
-- [API Overview](api/README.md) — Auth model, request/response envelopes, error codes
-- [Event Schemas](events/schemas.md) — Signal opcode catalog and payload structures
-- [Verification Examples](verification/README.md) — TypeScript reference implementations for signing and verification
 
 ## License
 
