@@ -40,6 +40,10 @@ UCMC is a verified economic network using cryptographic identity, escrowed settl
 
 - [Threat Model](threat-model/README.md) — Adversary assumptions and trust boundaries
 
+### Project
+
+- [Changelog](CHANGELOG.md)
+
 ## License
 
 This project is licensed under the [Apache License 2.0](LICENSE).
