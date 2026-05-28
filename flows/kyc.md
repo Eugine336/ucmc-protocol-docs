@@ -19,7 +19,7 @@ sequenceDiagram
     A->>D: Rate limit check, idempotency
     A->>K: Create verification session
     K-->>A: Session ID + SDK URL
-    A->>D: Insert kyc_sessions (PENDING)
+    A->>D: Insert session record (PENDING)
     A-->>F: SDK URL
 
     U->>K: Complete identity verification
@@ -27,7 +27,7 @@ sequenceDiagram
     A->>A: Verify webhook signature
     A->>A: Map provider status → platform signal
     A->>A: Sanctions screening (OFAC)
-    A->>D: Upsert kyc_results
+    A->>D: Upsert verification result
     A->>D: Emit platform signal (0x91 / 0x92 / 0x9b)
 
     F->>A: Poll GET /kyc/status/:actorId
