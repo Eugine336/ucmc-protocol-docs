@@ -32,6 +32,10 @@ UCMC is a verified economic network using cryptographic identity, escrowed settl
 
 - [TypeScript SDK](sdk/typescript/README.md) — Reference implementation for identity, signing, verification, and API client
 
+### Whitepaper
+
+- [Technical Whitepaper](whitepaper/README.md) — Trust model, cryptographic foundations, settlement lifecycle, adversarial analysis
+
 ### Reference
 
 - [Threat Model](threat-model/README.md) — Adversary assumptions and trust boundaries
