@@ -34,3 +34,12 @@
 | Throughout | File:line refs: `App.tsx:206-330`, `Onboarding.tsx:270-301`, `OnboardingWizard.tsx:332-356`, `LegalGate.tsx:128-137`, `complianceContext.tsx:90-91`, `complianceContext.tsx:225-235`, `onboarding.ts:224-281`, `onboardingService.ts:212-312`, `015b_onboarding_fixes.sql:54-77`, `016b_onboarding_gates.sql:110-203`, `016b_onboarding_gates.sql:225-233`, `002_schema.sql:414-428` | File:line references |
 | Throughout | `[unverified ...]` markers | Unverified internal notes |
 | Throughout | `ucmc_identity_v*` localStorage key references | localStorage key names |
+
+## Re-sync: 2026-07-10
+
+Re-synced to reflect the current profile-identity model and KYC recovery. Added
+the three distinct identity fields (public display name, unique `@handle`,
+private legal name) and a note that KYC during onboarding runs as an owned,
+recoverable session. Maintained abstraction: table/column names, route paths,
+storage keys, uniqueness-enforcement internals, and the session primitive's
+internals remain excluded.

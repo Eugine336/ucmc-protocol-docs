@@ -33,3 +33,12 @@
 | Entire section | "Where to look in the code" | File:line reference section |
 | Failure modes | "Where" column with file refs (`WalletPanel.tsx:270-369`, `wallet.ts:207-218`, `walletService.ts:142-148`, `signing.ts:83`, `payment.ts:744-870`, `admin.ts:866-895`, `002_schema.sql:379-387`, `004_layers_15.sql:204-215`) | File:line references; column dropped entirely |
 | Throughout | "`balances.in_withdrawal`" column references | Internal column name; replaced with "pending-withdrawal balance portion" |
+
+## Re-sync: 2026-07-10
+
+Re-synced to reflect the native multi-currency ledger and the owned-session
+settlement model. The "Balance Model" section now describes per-currency ledger
+positions (conversion at settlement), and Step 7 notes settlement as an owned,
+recoverable session with reconciliation. Maintained abstraction: ledger table
+and column names, the session primitive's internals, payout-provider names, and
+webhook/event names remain excluded.

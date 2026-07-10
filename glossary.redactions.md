@@ -15,3 +15,11 @@
 | Signal tables | Compliance/platform signals table (`0x9b`–`0xa9`) removed | Compliance internals and enforcement surface |
 | Threshold signing categories | Entire override/emergency/stub action category section removed | Privileged override and emergency mechanism exposure |
 | Misc sections | Dormant/unactivated feature notes removed | Internal roadmap/weakness disclosure |
+
+## Re-sync: 2026-07-10
+
+Re-synced for terminology accuracy. Generalized `Balance Type` to a portion of
+a per-currency ledger position, and added `Ledger Position`, `External Workflow
+Session`, `Design Constitution`, and `Semantic Object` entries — all described
+at the concept level. Maintained abstraction: no vendor names, table/column
+names, internal signing domains, or roadmap notes were introduced.

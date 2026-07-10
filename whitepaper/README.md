@@ -113,13 +113,15 @@ The full API surface exposes 144 operations across 138 paths, organized into 13 
 
 Integrators can interact with the protocol through raw HTTP requests following the signing conventions documented in `api/README.md`, or through the reference TypeScript SDK, which provides typed wrappers for identity management, signing, verification, and a high-level HTTP client with methods for each major protocol operation (`sdk/typescript/README.md`).
 
+**External provider orchestration.** Operations that require a third-party provider — identity verification, deposits, payouts, on-chain settlement — are not hand-offs. UCMC models each as an *owned, recoverable session*: it creates the session, launches the provider, tracks the authoritative state, and remains responsible for every outcome, including interruptions such as blocked popups, failed redirects, closed tabs, network loss, or provider outages. A background reconciler re-checks non-terminal sessions against provider truth, and users can always resume, retry, or cancel. This "the platform owns the journey" property is one of five architectural laws formalized in the Design Constitution (`architecture/design-constitution.md`, `architecture/external-workflow-sessions.md`).
+
 ---
 
 ## 5. Settlement Lifecycle
 
 Fund movement in UCMC follows a state machine with defined transitions. No API endpoint permits direct balance transfer between actors — funds can only move through the escrow and withdrawal lifecycles described here.
 
-The protocol maintains three balance portions per actor: `free` (available for spending, hiring, or withdrawal), `in_escrow` (locked in active contracts), and `in_withdrawal` (held during the 24-hour withdrawal timelock). All balance mutations are atomic — funds move between portions within a single database transaction to prevent double-spend (`flows/withdrawals.md`).
+The protocol maintains value on a native, per-currency ledger. Each actor holds one *ledger position* per currency they have received — not a single fungible balance — and each position tracks three portions: `free` (available for spending, hiring, or withdrawal), `in_escrow` (locked in active contracts), and `in_withdrawal` (held during the 24-hour withdrawal timelock). Value is held in the currency it was received in; conversion to a destination currency occurs only at settlement. All balance mutations are atomic — value moves between portions of a position within a single database transaction to prevent double-spend (`flows/withdrawals.md`, `architecture/multi-currency-ledger.md`).
 
 **Escrow lifecycle.** A buyer initiates a contract by sending signal `0x53` (DEMAND) targeting a seller's actor ID and specifying a catalogue item, price, and delivery timeline. This signal is signed with the buyer's Ed25519 key and accompanied by a proof-of-work nonce. On acceptance, signal `0x02` (LOCK) atomically moves the specified amount from the buyer's `free` balance to `in_escrow`. The seller delivers by submitting signal `0x04` (RELEASE) with a delivery payload specifying the mode — `FILE` (uploaded to object storage), `ACCESS` (encrypted content with an ephemeral key), or `MANUAL` (out-of-band delivery). The buyer confirms receipt with signal `0x65` (CONFIRM). Finalization via signal `0x05` (FINALIZE) settles the escrow — funds move from `in_escrow` to the seller's `free` balance. After finalization, either party may submit a review with signal `0x66` (REVIEW), carrying a star rating (1–5) and text body (`flows/marketplace-transaction.md`).
 
@@ -220,6 +222,9 @@ Several significant areas remain unresolved or unspecified. Honesty about these 
 ### In-repo specifications
 
 - [architecture/overview.md](../architecture/overview.md) — System topology, component boundaries, request flow, and design rationale
+- [architecture/design-constitution.md](../architecture/design-constitution.md) — The five architectural laws governing the platform
+- [architecture/external-workflow-sessions.md](../architecture/external-workflow-sessions.md) — Owned, recoverable third-party integration pattern
+- [architecture/multi-currency-ledger.md](../architecture/multi-currency-ledger.md) — Native per-currency settlement ledger
 - [crypto/identity-and-signing.md](../crypto/identity-and-signing.md) — Ed25519 actor model, key derivation, signing domains, and verification flow
 - [threat-model/README.md](../threat-model/README.md) — 14 in-scope threat classes, 5 out-of-scope threats, cryptographic primitives, and defense layers
 - [events/schemas.md](../events/schemas.md) — 22-opcode signal catalog, 16 signing domains, and request envelope specification

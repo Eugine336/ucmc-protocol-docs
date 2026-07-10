@@ -13,7 +13,50 @@ would need to react to.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Design Constitution.** `architecture/design-constitution.md` — the five
+  architectural laws (Workflows Are Destinations; UCMC Owns The Journey; The
+  Workspace Is The Application; The Platform Speaks With One Voice; One Mental
+  Model), described at the architecture level.
+- **External workflow sessions.** `architecture/external-workflow-sessions.md`
+  — the owned, recoverable state-machine pattern for third-party integrations
+  (identity verification, deposits, payouts), including the lifecycle and the
+  resume / retry / cancel recovery guarantees.
+- **Multi-currency ledger.** `architecture/multi-currency-ledger.md` — the
+  native per-currency settlement ledger (per-currency positions, conservation
+  and denomination-integrity invariants, conversion only at settlement).
+
+### Changed
+
+- **Architecture overview.** Replaced the "route-lite navigation" rationale
+  with the workflow-as-destination model (Laws 1 & 3); added references to the
+  Design Constitution, external workflow sessions, and the multi-currency
+  ledger; noted that provider interactions are orchestrated as owned,
+  recoverable sessions.
+- **KYC flow.** Corrected the prior "entirely outside UCMC's control" framing —
+  identity verification is now documented as an owned, recoverable session with
+  resume / retry / cancel and background reconciliation.
+- **Withdrawals flow.** Generalized the balance model to per-currency ledger
+  positions; documented settlement as an owned, recoverable session with
+  conversion applied at settlement.
+- **Onboarding flow.** Documented the three distinct identity fields (public
+  display name, unique `@handle`, private legal name) and their roles; noted
+  KYC recovery during onboarding.
+- **Whitepaper.** Updated the settlement lifecycle for the per-currency ledger
+  and added the external-provider ownership property; referenced the new
+  architecture documents.
+- **Glossary.** Generalized `Balance Type` to a per-currency ledger position
+  and added `Ledger Position`, `External Workflow Session`, `Design
+  Constitution`, and `Semantic Object` entries.
+
+### Notes
+
+- These are documentation accuracy updates reflecting the current system
+  architecture. No public signing domain, signal opcode, or endpoint changed;
+  integrator clients require no changes. Vendor names, runtime/container
+  identifiers, and the frontend framework remain abstracted per the
+  repository's existing public/private boundary.
 
 ## [0.1.0] — 2026-05-28
 
