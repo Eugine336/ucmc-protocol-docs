@@ -101,6 +101,16 @@ The trust kernel is the protocol verification boundary that validates actor sign
 
 UCMC integrates with category-level external capabilities only: payments provider, KYC provider, object storage, edge CDN/WAF, and observability/secrets infrastructure.
 
+Provider interactions that the user initiates — identity verification, deposits, payouts — are orchestrated as **owned, recoverable sessions** rather than hand-offs. UCMC creates the session, launches the provider, tracks the authoritative state, and remains responsible for every outcome (including popup blocking, redirect failure, network loss, or provider outage). See [external-workflow-sessions.md](./external-workflow-sessions.md).
+
+## Value and settlement model
+
+Value is held on a native, per-currency ledger. Each actor holds ledger positions — one per currency received — rather than a single fungible balance, and conversion happens only at settlement. See [multi-currency-ledger.md](./multi-currency-ledger.md).
+
+## Design principles
+
+The architecture is governed by five formalized laws — Workflows Are Destinations, UCMC Owns The Journey, The Workspace Is The Application, The Platform Speaks With One Voice, and One Mental Model. See the [Design Constitution](./design-constitution.md).
+
 ## Design rationale
 
 ### Why container-first deployment before full cluster orchestration?
@@ -111,9 +121,9 @@ The architecture prioritizes deterministic startup, operational simplicity, and 
 
 ESM keeps import/export semantics explicit and consistent across services, which improves dependency clarity and reduces runtime ambiguity.
 
-### Why route-lite frontend navigation?
+### Why workflow-as-destination navigation?
 
-Route-lite navigation reduces client complexity and keeps protocol state transitions explicit in signed API calls rather than hidden behind deep client routing state.
+Significant workflows are addressable destinations with their own routes, history, and recovery paths rather than transient overlays. This keeps protocol state transitions explicit — a workflow's state can be linked to, resumed, and reasoned about — instead of being hidden inside ephemeral client state. Lightweight, momentary interactions remain in dialogs. See the [Design Constitution](./design-constitution.md) (Laws 1 and 3) for the full rationale.
 
 ### Why separate reverse-proxy configurations by surface?
 

@@ -37,7 +37,7 @@ The wizard presents up to 10 steps. Buyers complete steps 1–6; sellers complet
 | 1 | Terms of Service | Checkbox acceptance | `0x69` | Both |
 | 2 | Email Address | Email address | `0x68` | Both |
 | 3 | Verify Email | 6-digit OTP | — | Both |
-| 4 | Profile Setup | Legal name, avatar, bio | `0x61` | Both |
+| 4 | Profile Setup | Display name, @handle, legal name, avatar, bio | `0x61` | Both |
 | 5 | Identity Verification | KYC session (or deferred) | `0x90` | Both |
 | 5b | KYC Pending | Waiting for provider result | — | Both |
 | 6 | Account Type | Buyer / Seller / Both | `0x61` | Both |
@@ -103,6 +103,29 @@ A 6-digit OTP is generated and stored as: `SHA-256("UCMC_EMAIL_OTP_V1:{actorId}:
 ### Email Verification
 
 The user submits the 6-digit OTP. The backend performs constant-time comparison against the stored hash, atomically consumes the OTP on success, marks the email as verified, and emits an `EMAIL_VERIFIED` platform signal.
+
+### Profile Identity Fields
+
+Profile setup captures three distinct identity fields, each with a separate purpose:
+
+| Field | Purpose | Visibility |
+|-------|---------|------------|
+| Display name | Friendly label shown next to the actor | Public |
+| Handle (`@username`) | Unique public identifier used in profile URLs and mentions | Public, unique |
+| Legal name | Full legal name used for identity verification against provider records | Private |
+
+The distinction matters for compliance: KYC providers verify against a
+government-issued **legal name**, which is neither the public display name nor
+the handle. Collecting the legal name during profile setup is what makes
+[KYC verification](./kyc.md) able to proceed.
+
+### Identity Verification (KYC)
+
+KYC is initiated with signal `0x90` (KYC_START) and can be deferred with "Skip
+for now." The verification runs as an [owned, recoverable session](../architecture/external-workflow-sessions.md),
+so an interrupted attempt during onboarding (blocked popup, closed tab, network
+loss) can be resumed, retried, or cancelled rather than stranding the user. See
+[flows/kyc.md](./kyc.md).
 
 ### Onboarding Completion
 

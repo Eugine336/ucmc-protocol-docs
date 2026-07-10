@@ -20,3 +20,13 @@
 | Request journey | Concrete proxy chain details reduced to logical edge/gateway path | Deployment abstraction |
 | Request journey | Exact body-size and timestamp numeric thresholds removed | Operational tuning details |
 | Environment variable manifest | Entire section removed (keys for payments, KYC, storage, observability, secrets infrastructure) | Secret and infrastructure exposure risk |
+
+## Re-sync: 2026-07-10
+
+Re-synced to reflect the current architecture. Replaced the "route-lite
+navigation" rationale with the workflow-as-destination model, and added
+concept-level sections for the Design Constitution, owned external-workflow
+sessions, and the multi-currency ledger. Maintained abstraction: the frontend
+framework and version remain unnamed (navigation is described behaviourally),
+runtime/container identifiers remain excluded, error-tracking and secrets
+vendors remain category terms, and provider names remain abstracted.

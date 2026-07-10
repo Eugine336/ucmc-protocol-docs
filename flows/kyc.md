@@ -53,7 +53,7 @@ The backend then creates a session with the configured KYC provider, which retur
 
 ## Step 3: User Completes at Provider
 
-The user is redirected to the KYC provider's SDK URL in a new browser tab. They upload identity documents and complete face verification. This step happens entirely outside UCMC's control.
+The user is launched into the KYC provider's flow to upload identity documents and complete face verification. The provider performs this specialized step, but UCMC does **not** hand the journey off: the verification is tracked as an [owned, recoverable session](../architecture/external-workflow-sessions.md). If the launch is interrupted — a blocked popup, a closed tab, a failed redirect, or a network drop — the user is never stranded. On return, UCMC determines the authoritative state and offers the correct next action (resume, retry, or cancel).
 
 ## Step 4: Webhook Callback
 
@@ -99,6 +99,17 @@ The frontend polls the KYC status endpoint at regular intervals:
 A window event (`compliance:kyc-changed`) triggers an immediate refresh when the status changes.
 
 **Status display priority:** `VERIFIED` > `REJECTED` > `SANCTIONS_HIT`
+
+## Workflow Session & Recovery
+
+The verification attempt is backed by an [external workflow session](../architecture/external-workflow-sessions.md) owned by UCMC. This guarantees the user always has a way forward:
+
+- **Resume** — an in-progress verification can be re-entered after a page reload, a device switch, or a return visit, because the authoritative session state lives with UCMC rather than in the browser.
+- **Retry** — a failed attempt can be restarted with a fresh session without being blocked by the previous one.
+- **Cancel** — a pending session can be abandoned cleanly.
+- **Reconciliation** — a background process re-checks non-terminal sessions against provider truth, so a delayed or missed webhook is self-healing rather than a permanent `PENDING` state.
+
+These affordances are surfaced both on the KYC page and via an application-level indicator of unfinished workflows, so a verification started on one surface is recoverable from anywhere.
 
 ## KYC Status State Machine
 

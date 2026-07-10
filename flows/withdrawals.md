@@ -100,7 +100,7 @@ Very-high-value withdrawals can require N-of-M signatures from a multi-key keyri
 
 ### Step 7: Settlement
 
-Once released, the platform initiates settlement with the appropriate payout provider.
+Once released, the platform initiates settlement with the appropriate payout provider. Settlement is tracked as an [owned, recoverable session](../architecture/external-workflow-sessions.md): UCMC records the authoritative status and reconciles it against provider truth, so a delayed or missed callback does not leave a withdrawal in an indeterminate state. Any conversion to the destination currency is applied at this step.
 
 **Webhook verification:** The payout provider sends an HMAC-signed callback with timing-safe comparison to confirm settlement outcome.
 
@@ -110,7 +110,7 @@ Once released, the platform initiates settlement with the appropriate payout pro
 
 ## Balance Model
 
-UCMC maintains three balance portions per actor:
+UCMC holds value on a native, per-currency ledger. Each actor holds **ledger positions** — one per currency received — rather than a single fungible balance. Within each currency position, value is tracked across three portions:
 
 | Portion | Description |
 |---------|-------------|
@@ -118,7 +118,7 @@ UCMC maintains three balance portions per actor:
 | `in_escrow` | Locked in active escrow contracts |
 | `in_withdrawal` | Held during the 24-hour timelock period |
 
-All balance mutations are atomic — funds move between portions within a single transaction to prevent double-spend.
+All balance mutations are atomic — value moves between portions of a currency position within a single transaction to prevent double-spend. Value is held in the currency it was received in; any conversion to a withdrawal's destination currency happens only at settlement. See [architecture/multi-currency-ledger.md](../architecture/multi-currency-ledger.md).
 
 ## Deposits
 

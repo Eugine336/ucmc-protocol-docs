@@ -24,3 +24,13 @@
 | Throughout | References to `backend/services/kyc/*` files | File:line references |
 | Failure modes | Kept error codes and recovery actions; stripped file:line refs | Reformatted as clean table |
 | Webhook section | Specific header names (`req.headers['signature']`, `req.headers['x-payload-digest']`, `req.headers['stripe-signature']`) | Provider-specific header names; abstracted to scheme description |
+
+## Re-sync: 2026-07-10
+
+Re-synced to reflect the owned, recoverable external-workflow model. Step 3's
+"entirely outside UCMC's control" framing was replaced with the owned-session
+description, and a "Workflow Session & Recovery" section was added. Maintained
+abstraction: the session primitive is described at the architecture level only;
+internal adapter/registry class names, provider names, the session table and
+column names, feature-flag names, and reconciliation-worker internals remain
+excluded.

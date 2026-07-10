@@ -79,6 +79,15 @@ The policy and decision process for protocol parameter changes and controlled fe
 ### UCMC
 The protocol and system model documented in this repository.
 
+### Design Constitution
+The five architectural laws that govern UCMC — Workflows Are Destinations, UCMC Owns The Journey, The Workspace Is The Application, The Platform Speaks With One Voice, and One Mental Model. See [architecture/design-constitution.md](architecture/design-constitution.md).
+
+### External Workflow Session
+A recoverable state machine, owned by UCMC, that orchestrates a third-party provider interaction (identity verification, deposit, payout). It tracks authoritative state and guarantees resume / retry / cancel recovery paths so a provider step is never a dead end. See [architecture/external-workflow-sessions.md](architecture/external-workflow-sessions.md).
+
+### Semantic Object
+An entity with its own identity and lifecycle — for example a product, wallet, escrow, organization, contract, message, or order. Only semantic objects receive visual containment (cards, borders); pages, dashboards, and navigation do not.
+
 ## Compliance, identity, and settlement terms
 
 ### AML
@@ -94,11 +103,14 @@ Policy checkpoints that must pass before specific actions (for example, settleme
 A temporary locked-funds state used to enforce conditional settlement between counterparties.
 
 ### Balance Type
-Protocol balance partition:
+Portion of a per-currency ledger position:
 
 - `FREE`
 - `IN_ESCROW`
 - `IN_WITHDRAWAL`
+
+### Ledger Position
+An actor's holding in a single currency, tracked as `FREE` / `IN_ESCROW` / `IN_WITHDRAWAL` portions. Actors hold one position per currency received rather than a single fungible balance; value is held in the currency it arrived in and converted only at settlement. See [architecture/multi-currency-ledger.md](architecture/multi-currency-ledger.md).
 
 ### Delivery Mode
 The fulfillment method for a transaction (for example, digital, service, or hybrid fulfillment classes).

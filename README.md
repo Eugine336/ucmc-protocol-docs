@@ -33,6 +33,9 @@ Authoritative documents for the protocol. The whitepaper references these.
 | Doc | What it covers |
 |---|---|
 | [architecture/overview.md](./architecture/overview.md) | System topology, request flow, design rationale |
+| [architecture/design-constitution.md](./architecture/design-constitution.md) | The five architectural laws governing the platform |
+| [architecture/external-workflow-sessions.md](./architecture/external-workflow-sessions.md) | Owned, recoverable third-party integration pattern |
+| [architecture/multi-currency-ledger.md](./architecture/multi-currency-ledger.md) | Native per-currency settlement ledger |
 | [crypto/identity-and-signing.md](./crypto/identity-and-signing.md) | Ed25519 actor model, signing domains, replay protection |
 | [threat-model/README.md](./threat-model/README.md) | 14 in-scope threat classes, defenses, out-of-scope items |
 | [events/schemas.md](./events/schemas.md) | 22 signal opcodes, 16 signing domains, request envelope |
